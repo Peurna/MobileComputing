@@ -28,40 +28,71 @@ import androidx.compose.material3.Button
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.Arrangement
+import androidx.navigation.NavController
+import androidx.navigation.compose.NavHost
+import androidx.navigation.compose.composable
+import androidx.navigation.compose.rememberNavController
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.mutableStateOf
+import android.content.Context
+import java.io.File
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.activity.result.PickVisualMediaRequest
+import android.net.Uri
+import coil.compose.rememberAsyncImagePainter
+import androidx.compose.material3.OutlinedTextField
+
 
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContent {
-            ComposeTutorialTheme() {
+            ComposeTutorialTheme {
+                val navController = rememberNavController()
                 Surface(modifier = Modifier.fillMaxSize()) {
-                    Conversation(
-                        listOf(
-                            Message("User1", "Hello", "12:00", pic = R.drawable.binks),
-                            Message("User2", "Hi", "12:00", pic = R.drawable.binks)
-                        )
-                    )
+                    NavHost(
+                        navController = navController,
+                        startDestination = "home_screen"
+                    ){
+                        composable("home_screen"){
+                            HomeScreen(navController)
+                        }
+                        composable("settings_screen"){
+                            SettingsScreen(navController)
+                        }
+
+                    }
                 }
             }
         }
     }
 
-    data class Message(val user: String, val message: String, val time: String, val pic: Int)
-
 
     @Composable
 
-    fun MessageCard(msg: Message) {
+    fun MessageCard(msg: Message, currentProfilePath: String?, currentName: String) {
         Surface(
             shape = MaterialTheme.shapes.large,
             shadowElevation = 50.dp,
             modifier = Modifier.padding(all = 10.dp)
         ) {
             Row(modifier = Modifier.padding(all = 15.dp)) {
+
+                val isTargetUser = msg.user == "SERGEANT ARCH DORNAN"
+                val painter = if (isTargetUser && currentProfilePath != null) {
+                    rememberAsyncImagePainter(currentProfilePath)
+                } else {
+                    painterResource(id = msg.pic)
+                }
+
+                val displayName = if (isTargetUser) currentName else msg.user
                 Image(
-                    painter = painterResource(msg.pic),
-                    contentDescription = "",
+                    painter = painter,
+                    contentDescription = null,
                     modifier = Modifier
                         .size(100.dp)
                         .border(5.dp, MaterialTheme.colorScheme.primary)
@@ -72,7 +103,7 @@ class MainActivity : ComponentActivity() {
 
                 Column {
                     Text(
-                        text = msg.user,
+                        text = displayName,
                         color = MaterialTheme.colorScheme.primary,
                         style = MaterialTheme.typography.titleLarge
                     )
@@ -93,24 +124,130 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    fun copyUriToInternalStorage(context: Context, uri: Uri): String? {
+        val inputStream = context.contentResolver.openInputStream(uri) ?: return null
+        val file = File(context.filesDir, "profile_picture.jpg")
+        file.outputStream().use { outputStream ->
+            inputStream.copyTo(outputStream)
+        }
+        return file.absolutePath
+    }
+
     @Composable
-    fun Conversation(messages: List<Message>) {
+    fun  HomeScreen(navController: NavController) {
+
+        val context = LocalContext.current
+        val userData = remember { UserData(context) }
+        val currentImagePath = remember {userData.getImagePath()}
+        val username = remember { userData.getUsername()}
+
+        Column(
+            horizontalAlignment = androidx.compose.ui.Alignment.CenterHorizontally
+        ){
+            Button(
+                onClick = {navController.navigate("settings_screen")},
+            ){
+                Text("Settings")
+            }
+
+            Conversation(demoMessages, currentImagePath, username)
+        }
+    }
+    @Composable
+    fun SettingsScreen(navController: NavController) {
+
+        val context = LocalContext.current
+        val userData = remember { UserData(context) }
+        val savedPath = remember {userData.getImagePath()}
+        var currentImagePath by remember  { mutableStateOf(savedPath)}
+        var username by remember {mutableStateOf(userData.getUsername())}
+        val launcher = rememberLauncherForActivityResult(
+
+            contract = ActivityResultContracts.PickVisualMedia()
+            ){uri ->
+            if (uri != null) {
+                val newPath = copyUriToInternalStorage(context, uri)
+                if (newPath != null) {
+                    userData.saveImagePath(newPath)
+                    currentImagePath = newPath
+                }
+            }
+        }
+
+
+        Column(
+            modifier = Modifier.fillMaxSize().padding(16.dp),
+            verticalArrangement = Arrangement.Top,
+            horizontalAlignment = androidx.compose.ui.Alignment.CenterHorizontally
+        ) {
+            Text("Settings", style = MaterialTheme.typography.headlineMedium)
+
+            Spacer(modifier = Modifier.weight(1f))
+
+            val painter = if (currentImagePath != null) {
+                rememberAsyncImagePainter(currentImagePath)
+            }else{
+                painterResource(id = R.drawable.images)
+
+            }
+
+            Image(painter = rememberAsyncImagePainter(currentImagePath), contentDescription = null,
+                modifier = Modifier.size(150.dp)
+                    .border(5.dp,
+                        MaterialTheme.colorScheme.primary))
+
+            Button(onClick = {launcher.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
+            }) {
+                Text("Change profile picture")
+            }
+
+
+
+            OutlinedTextField(
+                value = username,
+                onValueChange = {newText ->
+                    username = newText
+                    userData.saveUsername(newText)
+                },
+                label = {Text("Username")},
+                singleLine = true)
+
+            Spacer(modifier = Modifier.weight(1f))
+            Button(onClick = {
+                navController.navigate("home_screen") {
+                    popUpTo("home_screen") { inclusive = true }
+
+                }
+            }) {
+
+                Text("Back")
+            }
+        }
+            }
+
+
+    data class Message(val user: String, val message: String, val time: String, val pic: Int)
+
+
+
+    @Composable
+    fun Conversation(messages: List<Message>, currentProfilePath: String?, username: String) {
         val context = LocalContext.current
 
         LazyColumn {
             items(messages) { message ->
 
                 if (message.message == "vm") {
-                    AudioMessageButton(message, context)
+                    AudioMessageButton(context)
                 } else {
 
-                    MessageCard(message)
+                    MessageCard(message, currentProfilePath, username)
                 }
             }
         }
     }
     @Composable
-    fun AudioMessageButton(msg: Message, context: android.content.Context) {
+    fun AudioMessageButton(context: android.content.Context) {
         Row(
             modifier = Modifier
                 .padding(horizontal = 16.dp, vertical = 8.dp)
@@ -134,23 +271,38 @@ class MainActivity : ComponentActivity() {
     @Composable
     fun PreviewConversation() {
         ComposeTutorialTheme {
-            val demoMessages = listOf(
-                Message("SEGEANT ARCH DORNAN", "apolgy for bad english", "12:00", R.drawable.images),
-                Message("SEGEANT ARCH DORNAN", "where were u wen club penguin die", "12:00", R.drawable.images),
-                Message("SEGEANT ARCH DORNAN", "i was at house eating dorito when phone ring", "12:00", R.drawable.images),
-                Message(user = "phone", message = "*ring*", time = "12:00", pic = R.drawable.phone),
-                Message(user = "phone", message = "Club penguin is kil", time = "12:00", pic = R.drawable.phone),
-                Message("SEGEANT ARCH DORNAN", "no", "12:00", R.drawable.images),
-                Message("Club penguin", "*die*", "12:00", R.drawable.peng),
-                Message("SEGEANT ARCH DORNAN", "vm", "12:00", R.drawable.images),
-                Message("SEGEANT ARCH DORNAN", "Welcome to Camp Navarro.", "12:00", R.drawable.images),
-                Message("SEGEANT ARCH DORNAN", "So, you're the new replacement...", "12:00", R.drawable.images),
-                Message("SEGEANT ARCH DORNAN", "YOU ARE OUT OF UNIFORM, SOLDIER!", "12:00", R.drawable.images),
-                Message("SEGEANT ARCH DORNAN", "WHERE IS YOUR POWER ARMOR?", "12:00", R.drawable.images),
-            )
-
-            Conversation(messages = demoMessages)
+            Conversation(messages = demoMessages, null, "SERGEANT ARCH DORNAN")
 
         }
     }
-}
+
+val demoMessages = listOf(
+    Message("SERGEANT ARCH DORNAN", "apolgy for bad english", "12:00", R.drawable.images),
+    Message("SERGEANT ARCH DORNAN", "where were u wen club penguin die", "12:00", R.drawable.images),
+    Message("SERGEANT ARCH DORNAN", "i was at house eating dorito when phone ring", "12:00", R.drawable.images),
+    Message(user = "phone", message = "*ring*", time = "12:00", pic = R.drawable.phone),
+    Message(user = "phone", message = "Club penguin is kil", time = "12:00", pic = R.drawable.phone),
+    Message("SERGEANT ARCH DORNAN", "no", "12:00", R.drawable.images),
+    Message("Club penguin", "*die*", "12:00", R.drawable.peng),
+    Message("SERGEANT ARCH DORNAN", "vm", "12:00", R.drawable.images),
+    Message("SERGEANT ARCH DORNAN", "Welcome to Camp Navarro.", "12:00", R.drawable.images),
+    Message("SERGEANT ARCH DORNAN", "So, you're the new replacement...", "12:00", R.drawable.images),
+    Message("SERGEANT ARCH DORNAN", "YOU ARE OUT OF UNIFORM, SOLDIER!", "12:00", R.drawable.images),
+    Message("SERGEANT ARCH DORNAN", "WHERE IS YOUR POWER ARMOR?", "12:00", R.drawable.images),
+)
+
+class UserData(private val context: Context) {
+    private val sharedPref = context.getSharedPreferences("user_data", Context.MODE_PRIVATE)
+    fun saveUsername(name: String) {
+        sharedPref.edit().putString("username", name).apply()
+    }
+    fun getUsername(): String {
+        return sharedPref.getString("username", "SERGEANT ARCH DORNAN") ?: ""
+    }
+    fun saveImagePath(path: String) {
+        sharedPref.edit().putString("profile_pic_path", path).apply()
+    }
+    fun getImagePath(): String? {
+        return sharedPref.getString("profile_pic_path", null)
+    }
+}}
