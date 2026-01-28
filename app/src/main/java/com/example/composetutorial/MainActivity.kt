@@ -28,21 +28,68 @@ import androidx.compose.material3.Button
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.Arrangement
+import androidx.navigation.NavController
+import androidx.navigation.compose.NavHost
+import androidx.navigation.compose.composable
+import androidx.navigation.compose.rememberNavController
+import com.example.composetutorial.MainActivity.Message
 
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContent {
-            ComposeTutorialTheme() {
+            ComposeTutorialTheme {
+                val navController = rememberNavController()
                 Surface(modifier = Modifier.fillMaxSize()) {
-                    Conversation(
-                        listOf(
-                            Message("User1", "Hello", "12:00", pic = R.drawable.binks),
-                            Message("User2", "Hi", "12:00", pic = R.drawable.binks)
-                        )
-                    )
+                    NavHost(
+                        navController = navController,
+                        startDestination = "home_screen"
+                    ){
+                        composable("home_screen"){
+                            HomeScreen(navController)
+                        }
+                        composable("settings_screen"){
+                            SettingsScreen(navController)
+                        }
+
+                    }
                 }
+            }
+        }
+    }
+
+    @Composable
+    fun  HomeScreen(navController: NavController) {
+        Column(
+            horizontalAlignment = androidx.compose.ui.Alignment.CenterHorizontally
+        ){
+            Button(
+                onClick = {navController.navigate("settings_screen")},
+            ){
+                Text("Settings")
+            }
+
+            Conversation(demoMessages)
+        }
+    }
+    @Composable
+    fun SettingsScreen(navController: NavController) {
+        Column(
+            modifier = Modifier.fillMaxSize(),
+            verticalArrangement = Arrangement.Top,
+            horizontalAlignment = androidx.compose.ui.Alignment.CenterHorizontally
+        ) {
+            Text("Settings", style = MaterialTheme.typography.headlineMedium)
+
+            Spacer(modifier = Modifier.weight(1f))
+
+            Button(onClick = {
+                navController.navigate("home_screen") {
+                    popUpTo("home_screen") { inclusive = true }
+                }
+            }) {
+                Text("Back to Messages")
             }
         }
     }
@@ -101,7 +148,7 @@ class MainActivity : ComponentActivity() {
             items(messages) { message ->
 
                 if (message.message == "vm") {
-                    AudioMessageButton(message, context)
+                    AudioMessageButton(context)
                 } else {
 
                     MessageCard(message)
@@ -110,7 +157,7 @@ class MainActivity : ComponentActivity() {
         }
     }
     @Composable
-    fun AudioMessageButton(msg: Message, context: android.content.Context) {
+    fun AudioMessageButton(context: android.content.Context) {
         Row(
             modifier = Modifier
                 .padding(horizontal = 16.dp, vertical = 8.dp)
@@ -134,23 +181,22 @@ class MainActivity : ComponentActivity() {
     @Composable
     fun PreviewConversation() {
         ComposeTutorialTheme {
-            val demoMessages = listOf(
-                Message("SEGEANT ARCH DORNAN", "apolgy for bad english", "12:00", R.drawable.images),
-                Message("SEGEANT ARCH DORNAN", "where were u wen club penguin die", "12:00", R.drawable.images),
-                Message("SEGEANT ARCH DORNAN", "i was at house eating dorito when phone ring", "12:00", R.drawable.images),
-                Message(user = "phone", message = "*ring*", time = "12:00", pic = R.drawable.phone),
-                Message(user = "phone", message = "Club penguin is kil", time = "12:00", pic = R.drawable.phone),
-                Message("SEGEANT ARCH DORNAN", "no", "12:00", R.drawable.images),
-                Message("Club penguin", "*die*", "12:00", R.drawable.peng),
-                Message("SEGEANT ARCH DORNAN", "vm", "12:00", R.drawable.images),
-                Message("SEGEANT ARCH DORNAN", "Welcome to Camp Navarro.", "12:00", R.drawable.images),
-                Message("SEGEANT ARCH DORNAN", "So, you're the new replacement...", "12:00", R.drawable.images),
-                Message("SEGEANT ARCH DORNAN", "YOU ARE OUT OF UNIFORM, SOLDIER!", "12:00", R.drawable.images),
-                Message("SEGEANT ARCH DORNAN", "WHERE IS YOUR POWER ARMOR?", "12:00", R.drawable.images),
-            )
-
             Conversation(messages = demoMessages)
 
         }
     }
 }
+val demoMessages = listOf(
+    Message("SERGEANT ARCH DORNAN", "apolgy for bad english", "12:00", R.drawable.images),
+    Message("SERGEANT ARCH DORNAN", "where were u wen club penguin die", "12:00", R.drawable.images),
+    Message("SERGEANT ARCH DORNAN", "i was at house eating dorito when phone ring", "12:00", R.drawable.images),
+    Message(user = "phone", message = "*ring*", time = "12:00", pic = R.drawable.phone),
+    Message(user = "phone", message = "Club penguin is kil", time = "12:00", pic = R.drawable.phone),
+    Message("SERGEANT ARCH DORNAN", "no", "12:00", R.drawable.images),
+    Message("Club penguin", "*die*", "12:00", R.drawable.peng),
+    Message("SERGEANT ARCH DORNAN", "vm", "12:00", R.drawable.images),
+    Message("SERGEANT ARCH DORNAN", "Welcome to Camp Navarro.", "12:00", R.drawable.images),
+    Message("SERGEANT ARCH DORNAN", "So, you're the new replacement...", "12:00", R.drawable.images),
+    Message("SERGEANT ARCH DORNAN", "YOU ARE OUT OF UNIFORM, SOLDIER!", "12:00", R.drawable.images),
+    Message("SERGEANT ARCH DORNAN", "WHERE IS YOUR POWER ARMOR?", "12:00", R.drawable.images),
+)
