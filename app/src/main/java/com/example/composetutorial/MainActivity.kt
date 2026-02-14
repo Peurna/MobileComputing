@@ -37,6 +37,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.mutableStateOf
 import android.content.Context
+import android.hardware.SensorManager
 import java.io.File
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -44,12 +45,40 @@ import androidx.activity.result.PickVisualMediaRequest
 import android.net.Uri
 import coil.compose.rememberAsyncImagePainter
 import androidx.compose.material3.OutlinedTextField
+import android.Manifest
+import android.os.Build
+import android.hardware.Sensor
+import android.hardware.SensorEvent
+import android.hardware.SensorEventListener
+import android.app.NotificationChannel
+import android.app.NotificationManager
+import android.app.PendingIntent
+import android.content.Intent
+import androidx.core.app.NotificationCompat
+import androidx.core.app.NotificationManagerCompat
 
 
 
-class MainActivity : ComponentActivity() {
+class MainActivity : ComponentActivity(), SensorEventListener {
+
+    private lateinit var sensor: SensorManager
+    private var lightsensor: Sensor? = null
+    private var lightLevel by mutableStateOf(0f)
+    private var resumed = false
+    private val permission = registerForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { isGranted: Boolean ->}
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
+        notificationchannel()
+        sensor = getSystemService(Context.SENSOR_SERVICE) as SensorManager
+        lightsensor = sensor.getDefaultSensor(Sensor.TYPE_LIGHT)
+        if(Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU){
+            permission.launch(Manifest.permission.POST_NOTIFICATIONS)
+        }
+
         setContent {
             ComposeTutorialTheme {
                 val navController = rememberNavController()
@@ -68,8 +97,70 @@ class MainActivity : ComponentActivity() {
                     }
                 }
             }
+
         }
     }
+
+    override fun onResume() {
+        super.onResume()
+        resumed = true
+        lightsensor?.let {
+            sensor.registerListener(this, it, SensorManager.SENSOR_DELAY_UI)
+        }
+    }
+
+
+    override fun onPause() {
+        super.onPause()
+        resumed = false
+    }
+
+
+    override fun onSensorChanged(event: SensorEvent?) {
+        if (event?.sensor?.type == Sensor.TYPE_LIGHT) {
+            lightLevel = event.values[0]
+
+            if (!resumed && lightLevel < 10f) {
+                sendnotification()
+            }
+        }
+
+    }
+    override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) {}
+    private fun notificationchannel() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val channel = NotificationChannel(
+                "test",
+                "sensor_notifications",
+                NotificationManager.IMPORTANCE_HIGH
+            )
+            val manager = getSystemService(NotificationManager::class.java)
+            manager.createNotificationChannel(channel)
+        }
+    }
+
+    private fun sendnotification() {
+        val intent = Intent(this, MainActivity::class.java).apply {
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
+        }
+        val pendingIntent = PendingIntent.getActivity(this, 0, intent, PendingIntent.FLAG_IMMUTABLE)
+
+        val builder = NotificationCompat.Builder(this, "test")
+            .setSmallIcon(android.R.drawable.ic_dialog_info)
+            .setContentTitle("Light sensor")
+            .setContentText("Why so dark???")
+            .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setContentIntent(pendingIntent)
+            .setAutoCancel(true)
+
+        with(NotificationManagerCompat.from(this)) {
+            try {
+                notify(1, builder.build())
+            } catch (e: SecurityException) {
+            }
+        }
+    }
+
 
 
     @Composable
@@ -156,6 +247,9 @@ class MainActivity : ComponentActivity() {
     @Composable
     fun SettingsScreen(navController: NavController) {
 
+
+
+
         val context = LocalContext.current
         val userData = remember { UserData(context) }
         val savedPath = remember {userData.getImagePath()}
@@ -181,6 +275,10 @@ class MainActivity : ComponentActivity() {
             horizontalAlignment = androidx.compose.ui.Alignment.CenterHorizontally
         ) {
             Text("Settings", style = MaterialTheme.typography.headlineMedium)
+            Surface(modifier = Modifier.padding(vertical = 16.dp)){
+            Text(text = "Light level: $lightLevel lx", modifier = Modifier.padding(16.dp), style = MaterialTheme.typography.headlineSmall
+            )
+        }
 
             Spacer(modifier = Modifier.weight(1f))
 
