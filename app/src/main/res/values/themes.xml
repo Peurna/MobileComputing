@@ -1,5 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
-<resources>
-
-    <style name="Theme.ComposeTutorial" parent="android:Theme.Material.Light.NoActionBar" />
+<resources xmlns:tools="http://schemas.android.com/tools">
+    <style name="Theme.App.Starting" parent="Theme.SplashScreen">
+        <item name="windowSplashScreenBackground">#FFD580</item>
+        <item name="windowSplashScreenAnimatedIcon">@drawable/animation</item>
+        <item name="android:windowSplashScreenBrandingImage" tools:targetApi="31">@drawable/teksti</item>
+        <item name="postSplashScreenTheme">@android:style/Theme.DeviceDefault.NoActionBar</item>
+    </style>
 </resources>

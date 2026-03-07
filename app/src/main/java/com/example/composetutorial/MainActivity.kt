@@ -4,7 +4,6 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.runtime.Composable
 import androidx.compose.material3.Text
-import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Row
@@ -56,6 +55,9 @@ import android.app.PendingIntent
 import android.content.Intent
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
+import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
+import android.graphics.Bitmap
+import androidx.compose.ui.graphics.asImageBitmap
 
 
 
@@ -70,6 +72,7 @@ class MainActivity : ComponentActivity(), SensorEventListener {
     ) { isGranted: Boolean ->}
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        installSplashScreen()
         super.onCreate(savedInstanceState)
 
         notificationchannel()
@@ -93,7 +96,9 @@ class MainActivity : ComponentActivity(), SensorEventListener {
                         composable("settings_screen"){
                             SettingsScreen(navController)
                         }
-
+                        composable("camera_gallery_screen") {
+                            CameraGalleryScreen(navController)
+                        }
                     }
                 }
             }
@@ -223,6 +228,27 @@ class MainActivity : ComponentActivity(), SensorEventListener {
         }
         return file.absolutePath
     }
+    fun saveImageToInternalStorage(context: Context, bitmap: Bitmap): String? {
+        val filename = "camera_image_${System.currentTimeMillis()}.jpg"
+        val file = File(context.filesDir, filename)
+        try {
+            file.outputStream().use { outputStream ->
+                bitmap.compress(Bitmap.CompressFormat.JPEG, 100, outputStream)
+            }
+            return file.absolutePath
+        } catch (e: Exception) {
+            e.printStackTrace()
+            return null
+        }
+    }
+
+    fun loadSavedImages(context: Context): List<String> {
+        val filesDir = context.filesDir
+        val imageFiles = filesDir.listFiles { _, name ->
+            name.startsWith("camera_image_") && name.endsWith(".jpg")
+        }
+        return imageFiles?.sortedByDescending { it.lastModified() }?.map { it.absolutePath } ?: emptyList()
+    }
 
     @Composable
     fun  HomeScreen(navController: NavController) {
@@ -311,6 +337,11 @@ class MainActivity : ComponentActivity(), SensorEventListener {
                 singleLine = true)
 
             Spacer(modifier = Modifier.weight(1f))
+            Button(onClick = { navController.navigate("camera_gallery_screen") }) {
+                Text("Open camera gallery")
+            }
+
+            Spacer(modifier = Modifier.weight(1f))
             Button(onClick = {
                 navController.navigate("home_screen") {
                     popUpTo("home_screen") { inclusive = true }
@@ -365,15 +396,92 @@ class MainActivity : ComponentActivity(), SensorEventListener {
         }
     }
 
-    @Preview
-    @Composable
-    fun PreviewConversation() {
-        ComposeTutorialTheme {
-            Conversation(messages = demoMessages, null, "SERGEANT ARCH DORNAN")
 
+    @Composable
+    fun Camera() {
+        var otettukuva by remember { mutableStateOf<Bitmap?>(null) }
+
+        val cameralauncher = rememberLauncherForActivityResult(
+            contract = ActivityResultContracts.TakePicturePreview()
+        ) { bitmap: Bitmap? ->
+            otettukuva = bitmap
+        }
+
+        Column(modifier = Modifier.padding(16.dp)) {
+
+            Button(onClick = { cameralauncher.launch(null) }) {
+                Text("Take picture with your camera")
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            otettukuva?.let { kuva ->
+                Image(
+                    bitmap = kuva.asImageBitmap(),
+                    contentDescription = "Otettu kuva",
+                    modifier = Modifier.size(250.dp)
+                )
+            }
         }
     }
+    @Composable
+    fun CameraGalleryScreen(navController: NavController) {
+        val context = LocalContext.current
+        var imagePaths by remember { mutableStateOf(loadSavedImages(context)) }
+        val userData = remember { UserData(context) }
+        val cameralauncher = rememberLauncherForActivityResult(
+            contract = ActivityResultContracts.TakePicturePreview()
+        ) { bitmap: Bitmap? ->
+            if (bitmap != null) {
+                saveImageToInternalStorage(context, bitmap)
+                imagePaths = loadSavedImages(context)
+            }
+        }
 
+        Column(
+            modifier = Modifier.fillMaxSize().padding(16.dp),
+            horizontalAlignment = androidx.compose.ui.Alignment.CenterHorizontally
+        ) {
+            Button(onClick = { cameralauncher.launch(null) }) {
+                Text("Take picture with your camera")
+            }
+            Spacer(modifier = Modifier.height(16.dp))
+            LazyColumn(
+                modifier = Modifier.weight(1f),
+                horizontalAlignment = androidx.compose.ui.Alignment.CenterHorizontally
+            ) {
+                items(imagePaths) { path ->
+                    Column(
+                        horizontalAlignment = androidx.compose.ui.Alignment.CenterHorizontally,
+                        modifier = Modifier.padding(bottom = 24.dp)
+                    ){
+                    Image(
+                        painter = rememberAsyncImagePainter(path),
+                        contentDescription = "Otettu kuva",
+                        modifier = Modifier
+                            .size(250.dp)
+                            .padding(bottom = 16.dp)
+                            .border(3.dp, MaterialTheme.colorScheme.primary)
+                    )
+                        Button(
+                            onClick = {
+                                userData.saveImagePath(path)
+                                navController.popBackStack()
+                            },
+                            modifier = Modifier.padding(top = 8.dp)
+                        ) {
+                            Text("Set as profile picture")
+                        }
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            Button(onClick = { navController.popBackStack() }) {
+                Text("Back")
+        }
+    }}
 val demoMessages = listOf(
     Message("SERGEANT ARCH DORNAN", "apolgy for bad english", "12:00", R.drawable.images),
     Message("SERGEANT ARCH DORNAN", "where were u wen club penguin die", "12:00", R.drawable.images),
